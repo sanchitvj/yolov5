@@ -37,3 +37,6 @@ fliplr: 0.5
 mosaic: 1.0
 mixup: 0.243
 copy_paste: 0.0
+# python train.py --weights yolov5l6.pt --data reef_split0.2.yaml -
+# -hyp hypv1.yaml --epochs 30 --batch-size 4 --imgsz 3200 --optimizer AdamW
+# --name l6_AdamW_hypv1
