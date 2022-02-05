@@ -161,6 +161,26 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             g0.append(v.weight)
         elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
             g1.append(v.weight)
+        if hasattr(v, 'im'):
+            for iv in v.im:
+                g0.append(iv.implicit)
+        if hasattr(v, 'ia'):
+            for iv in v.ia:
+                g0.append(iv.implicit)
+        if hasattr(v, 'id'):
+            for iv in v.id:
+                g0.append(iv.implicit)
+        if hasattr(v, 'iq'):
+            for iv in v.iq:
+                g0.append(iv.implicit)
+        if hasattr(v, 'ix'):
+            for iv in v.ix:
+                g0.append(iv.implicit)
+        if hasattr(v, 'ie'):
+            for iv in v.ie:
+                g0.append(iv.implicit)
+        if hasattr(v, 'ic'):
+            g0.append(v.ic.implicit)
 
     if opt.optimizer == 'Adam':
         optimizer = Adam(g0, lr=hyp['lr0'], betas=(hyp['momentum'], 0.999))  # adjust beta1 to momentum

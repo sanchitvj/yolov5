@@ -109,11 +109,68 @@ class Detect(nn.Module):
         return grid, anchor_grid
 
 
+class IDetect(nn.Module):
+    stride = None  # strides computed during build
+    export = False  # onnx export
+
+    def __init__(self, nc=80, anchors=(), ch=()):  # detection layer
+        super(IDetect, self).__init__()
+        self.nc = nc  # number of classes
+        self.no = nc + 5  # number of outputs per anchor
+        self.nl = len(anchors)  # number of detection layers
+        self.na = len(anchors[0]) // 2  # number of anchors
+        self.grid = [torch.zeros(1)] * self.nl  # init grid
+        a = torch.tensor(anchors).float().view(self.nl, -1, 2)
+        self.register_buffer("anchors", a)  # shape(nl,na,2)
+        self.register_buffer(
+            "anchor_grid", a.clone().view(self.nl, 1, -1, 1, 1, 2)
+        )  # shape(nl,1,na,1,1,2)
+        self.m = nn.ModuleList(
+            nn.Conv2d(x, self.no * self.na, 1) for x in ch
+        )  # output conv
+
+        self.ia = nn.ModuleList(ImplicitA(x) for x in ch)
+        self.im = nn.ModuleList(ImplicitM(self.no * self.na) for _ in ch)
+
+    def forward(self, x):
+        # x = x.copy()  # for profiling
+        z = []  # inference output
+        self.training |= self.export
+        for i in range(self.nl):
+            x[i] = self.im[i](self.m[i](self.ia[i](x[i])))  # conv
+            bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
+            x[i] = (
+                x[i]
+                .view(bs, self.na, self.no, ny, nx)
+                .permute(0, 1, 3, 4, 2)
+                .contiguous()
+            )
+
+            if not self.training:  # inference
+                if self.grid[i].shape[2:4] != x[i].shape[2:4]:
+                    self.grid[i] = self._make_grid(nx, ny).to(x[i].device)
+
+                y = x[i].sigmoid()
+                y[..., 0:2] = (y[..., 0:2] * 2.0 - 0.5 + self.grid[i]) * self.stride[
+                    i
+                ]  # xy
+                y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
+                z.append(y.view(bs, -1, self.no))
+
+        return x if self.training else (torch.cat(z, 1), x)
+
+    @staticmethod
+    def _make_grid(nx=20, ny=20):
+        yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)])
+        return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
+
+
 class Model(nn.Module):
     def __init__(
         self, cfg="yolov5s.yaml", ch=3, nc=None, anchors=None
     ):  # model, input channels, number of classes
-        super().__init__()
+        super(Model, self).__init__()
+        # super().__init__()
         if isinstance(cfg, dict):
             self.yaml = cfg  # model dict
         else:  # is *.yaml
@@ -149,6 +206,16 @@ class Model(nn.Module):
             check_anchor_order(m)
             self.stride = m.stride
             self._initialize_biases()  # only run once
+        if isinstance(m, IDetect):
+            s = 256  # 2x min stride
+            m.stride = torch.tensor(
+                [s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))]
+            )  # forward
+            m.anchors /= m.stride.view(-1, 1, 1)
+            check_anchor_order(m)
+            self.stride = m.stride
+            self._initialize_biases()  # only run once
+            # print('Strides: %s' % m.stride.tolist())
 
         # Init weights, biases
         initialize_weights(self)
@@ -167,8 +234,8 @@ class Model(nn.Module):
         https://www.kaggle.com/c/tensorflow-great-barrier-reef/discussion/300638#1657271
         """
         img_size = x.shape[-2:]  # height, width
-        s = [1, 0.85, 0.72]  # scales
-        f = [None, 3, None]  # flips (2-ud, 3-lr)
+        s = [1, 0.9, 0.8]  # scales
+        f = [None, None, 3]  # flips (2-ud, 3-lr)
         y = []  # outputs
         for si, fi in zip(s, f):
             xi = scale_img(x.flip(fi) if fi else x, si, gs=int(self.stride.max()))
@@ -343,33 +410,90 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             Focus,
             CrossConv,
             BottleneckCSP,
+            BottleneckCSPLG,
+            BottleneckCSPSE,
+            BottleneckCSPSAM,
+            BottleneckCSPSEA,
+            BottleneckCSPSAMA,
+            BottleneckCSPSAMB,
+            BottleneckCSPGC,
+            BottleneckCSPDNL,
+            BottleneckCSP2,
+            BottleneckCSP2SAM,
+            SPPCSP,
+            VoVCSP,
             C3,
+            DownD,
+            DownC,
+            DNL,
+            GC,
+            SAM,
+            SAMA,
+            BottleneckCSPTR,
+            BottleneckCSP2TR,
+            TR,
+            SPPCSPTR,
+            BottleneckCSPF,
             C3TR,
             C3SPP,
             C3Ghost,
         ]:
-            c1, c2 = ch[f], args[0]
+            c1, c2 = ch[f if f <= -1 else f + 1], args[0]  # ch[f], args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, 8)
 
             args = [c1, c2, *args[1:]]
-            if m in [BottleneckCSP, C3, C3TR, C3Ghost]:
+            if m in [
+                BottleneckCSP,
+                BottleneckCSPLG,
+                BottleneckCSPSE,
+                BottleneckCSPSAM,
+                BottleneckCSPSEA,
+                BottleneckCSPSAMA,
+                BottleneckCSPSAMB,
+                BottleneckCSPGC,
+                BottleneckCSPDNL,
+                BottleneckCSP2,
+                BottleneckCSP2SAM,
+                SPPCSP,
+                VoVCSP,
+                C3,
+                DownD,
+                DownC,
+                BottleneckCSPTR,
+                BottleneckCSP2TR,
+                TR,
+                SPPCSPTR,
+                BottleneckCSPF,
+                C3TR,
+                C3Ghost,
+            ]:
                 args.insert(2, n)  # number of repeats
                 n = 1
         elif m is nn.BatchNorm2d:
-            args = [ch[f]]
+            # args = [ch[f if f <= -1 else f + 1]]
+            [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m is Detect:
+            # c2 = sum([ch[x if x <= -1 else x + 1] for x in f])
+        # elif m is [Detect, IDetect]:
+        #     # args.append([ch[x] for x in f])
+        #     args.append([ch[x if x <= -1 else x + 1] for x in f])
+        #     if isinstance(args[1], int):  # number of anchors
+        #         args[1] = [list(range(args[1] * 2))] * len(f)
+        elif m in [Detect, IDetect]:
             args.append([ch[x] for x in f])
             if isinstance(args[1], int):  # number of anchors
                 args[1] = [list(range(args[1] * 2))] * len(f)
+        elif m in [ReOrg, DWT]:
+            c2 = ch[f] * 4
         elif m is Contract:
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:
             c2 = ch[f] // args[0] ** 2
         else:
-            c2 = ch[f]
+            # c2 = ch[f]
+            c2 = ch[f if f <= -1 else f + 1]
 
         m_ = (
             nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)
