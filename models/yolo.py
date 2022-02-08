@@ -234,8 +234,8 @@ class Model(nn.Module):
         https://www.kaggle.com/c/tensorflow-great-barrier-reef/discussion/300638#1657271
         """
         img_size = x.shape[-2:]  # height, width
-        s = [1, 0.9, 0.8]  # scales
-        f = [None, 3, None]  # flips (2-ud, 3-lr)
+        s = [1, 0.9, 0.8, 0.7]  # scales
+        f = [None, 3, None, 3]  # flips (2-ud, 3-lr)
         y = []  # outputs
         for si, fi in zip(s, f):
             xi = scale_img(x.flip(fi) if fi else x, si, gs=int(self.stride.max()))
