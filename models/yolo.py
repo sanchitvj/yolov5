@@ -234,7 +234,7 @@ class Model(nn.Module):
         https://www.kaggle.com/c/tensorflow-great-barrier-reef/discussion/300638#1657271
         """
         img_size = x.shape[-2:]  # height, width
-        s = [1, 0.85, 0.75]  # scales
+        s = [1, 0.9, 0.8]  # scales
         f = [None, 3, None]  # flips (2-ud, 3-lr)
         y = []  # outputs
         for si, fi in zip(s, f):
