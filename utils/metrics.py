@@ -82,9 +82,9 @@ def ap_per_class(
                     py.append(np.interp(px, mrec, mpre))  # precision at mAP@0.5
 
     # Compute F1 (harmonic mean of precision and recall)
-    # f1 = 2 * p * r / (p + r + eps)
+    f1 = 2 * p * r / (p + r + eps)
 
-    f2 = 5 * p * r / (4 * p + r + 1e-16)
+    f2 = 5 * p * r / (4 * p + r + eps)
 
     names = [
         v for k, v in names.items() if k in unique_classes

@@ -238,30 +238,11 @@ def run(
         )
     }
     class_map = coco80_to_coco91_class() if is_coco else list(range(1000))
-    s = ("%20s" + "%11s" * 6) % (
-        "Class",
-        "Images",
-        "Labels",
-        "P",
-        "R",
-        "mAP@.5",
-        "mAP@.5:.95",
-    )
-    dt, p, r, f2, mp, mr, map50, map = (
-        [0.0, 0.0, 0.0],
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-    )
+    s = ("%20s" + "%11s" * 6) % ("Class","Images","Labels","P","R","mAP@.5","mAP@.5:.95")
+    dt, p, r, f2, mp, mr, map50, map = ([0.0, 0.0, 0.0],0.0,0.0,0.0,0.0,0.0,0.0,0.0)
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
-    pbar = tqdm(
-        dataloader, desc=s, bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}"
-    )  # progress bar
+    pbar = tqdm(dataloader, desc=s, bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}")  # progress bar
     for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
         t1 = time_sync()
         if pt or jit or engine:
@@ -308,14 +289,7 @@ def run(
 
             if len(pred) == 0:
                 if nl:
-                    stats.append(
-                        (
-                            torch.zeros(0, niou, dtype=torch.bool),
-                            torch.Tensor(),
-                            torch.Tensor(),
-                            tcls,
-                        )
-                    )
+                    stats.append((torch.zeros(0, niou, dtype=torch.bool),torch.Tensor(),torch.Tensor(),tcls))
                 continue
 
             # Predictions
@@ -344,16 +318,9 @@ def run(
 
             # Save/log
             if save_txt:
-                save_one_txt(
-                    predn,
-                    save_conf,
-                    shape,
-                    file=save_dir / "labels" / (path.stem + ".txt"),
-                )
+                save_one_txt(predn,save_conf,shape,file=save_dir / "labels" / (path.stem + ".txt"))
             if save_json:
-                save_one_json(
-                    predn, jdict, path, class_map
-                )  # append to COCO-JSON dictionary
+                save_one_json(predn, jdict, path, class_map)  # append to COCO-JSON dictionary
             callbacks.run("on_val_image_end", pred, predn, path, names, im[si])
 
         # Plot images
@@ -363,11 +330,7 @@ def run(
                 target=plot_images, args=(im, targets, paths, f, names), daemon=True
             ).start()
             f = save_dir / f"val_batch{batch_i}_pred.jpg"  # predictions
-            Thread(
-                target=plot_images,
-                args=(im, output_to_target(out), paths, f, names),
-                daemon=True,
-            ).start()
+            Thread(target=plot_images,args=(im, output_to_target(out), paths, f, names),daemon=True).start()
 
     # Compute metrics
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
@@ -397,10 +360,7 @@ def run(
     t = tuple(x / seen * 1e3 for x in dt)  # speeds per image
     if not training:
         shape = (batch_size, 3, imgsz, imgsz)
-        LOGGER.info(
-            f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {shape}"
-            % t
-        )
+        LOGGER.info(f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {shape}"% t)
 
     # Plots
     if plots:
@@ -444,11 +404,7 @@ def run(
     # Return results
     model.float()  # for training
     if not training:
-        s = (
-            f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}"
-            if save_txt
-            else ""
-        )
+        s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ""
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
