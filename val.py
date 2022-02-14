@@ -150,12 +150,7 @@ def run(
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
-        device, pt, jit, engine = (
-            next(model.parameters()).device,
-            True,
-            False,
-            False,
-        )  # get model device, PyTorch model
+        device, pt, jit, engine = (next(model.parameters()).device, True, False, False)  # get model device, PyTorch model
 
         half &= device.type != "cpu"  # half precision only supported on CUDA
         model.half() if half else model.float()
@@ -163,22 +158,12 @@ def run(
         device = select_device(device, batch_size=batch_size)
 
         # Directories
-        save_dir = increment_path(
-            Path(project) / name, exist_ok=exist_ok
-        )  # increment run
-        (save_dir / "labels" if save_txt else save_dir).mkdir(
-            parents=True, exist_ok=True
-        )  # make dir
+        save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
+        (save_dir / "labels" if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
         # Load model
         model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data)
-        stride, pt, jit, onnx, engine = (
-            model.stride,
-            model.pt,
-            model.jit,
-            model.onnx,
-            model.engine,
-        )
+        stride, pt, jit, onnx, engine = (model.stride, model.pt, model.jit, model.onnx, model.engine)
         imgsz = check_img_size(imgsz, s=stride)  # check image size
         half &= (
             pt or jit or onnx or engine
@@ -191,9 +176,7 @@ def run(
             half = False
             batch_size = 1  # export.py models default to batch-size 1
             device = torch.device("cpu")
-            LOGGER.info(
-                f"Forcing --batch-size 1 square inference shape(1,3,{imgsz},{imgsz}) for non-PyTorch backends"
-            )
+            LOGGER.info(f"Forcing --batch-size 1 square inference shape(1,3,{imgsz},{imgsz}) for non-PyTorch backends")
 
         # Data
         data = check_dataset(data)  # check
@@ -231,12 +214,7 @@ def run(
 
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
-    names = {
-        k: v
-        for k, v in enumerate(
-            model.names if hasattr(model, "names") else model.module.names
-        )
-    }
+    names = {k: v for k, v in enumerate(model.names if hasattr(model, "names") else model.module.names)}
     class_map = coco80_to_coco91_class() if is_coco else list(range(1000))
     s = ("%20s" + "%11s" * 6) % ("Class","Images","Labels","P","R","mAP@.5","mAP@.5:.95")
     dt, p, r, f2, mp, mr, map50, map = ([0.0, 0.0, 0.0],0.0,0.0,0.0,0.0,0.0,0.0,0.0)
@@ -339,7 +317,7 @@ def run(
         tp, fp, p, r, f2, ap, ap_class = ap_per_class(
             *stats, plot=plots, save_dir=save_dir, names=names
         )
-        ap50, ap, f2 = ap[:, 0], ap.mean(1), f2.mean(1)  # AP@0.5, AP@0.5:0.95
+        ap50, ap, f2 = ap[:, 0], ap.mean(1), f2.mean(0)  # AP@0.5, AP@0.5:0.95
         mp, mr, f2, map50, map = p.mean(), r.mean(), f2.mean(), ap50.mean(), ap.mean()
         nt = np.bincount(
             stats[3].astype(np.int64), minlength=nc
